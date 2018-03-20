@@ -308,8 +308,8 @@ namespace MYAVX
 												 ((s.m256_f32[1]  + s.m256_f32[5]) + (s.m256_f32[3] +s.m256_f32[7]));}
 	inline double   sse_sum(__m256d s)    {return (s.m256d_f64[0] + s.m256d_f64[2]) + (s.m256d_f64[1] + s.m256d_f64[3]);}
 #else
-    inline float    sse_sum(__m128 s)    {float *f = (float*) (&s); return ((f[0] + f[4]) + (f[2] + f[6])) + ((f[1] + f[5]) + (f[3] + f[7]));}
-    inline double   sse_sum(__m128d s)   {double *d = (double*) (&s); return (d[0] + d[2]) + (d[1] + d[3]);}
+    inline float    sse_sum(__m256 s)    {float *f = (float*) (&s); return ((f[0] + f[4]) + (f[2] + f[6])) + ((f[1] + f[5]) + (f[3] + f[7]));}
+    inline double   sse_sum(__m256d s)   {double *d = (double*) (&s); return (d[0] + d[2]) + (d[1] + d[3]);}
 #endif
 	inline float  sse_dot(__m256 s1, __m256 s2)		
 	{
@@ -514,7 +514,8 @@ namespace ProgramCPU
 namespace ProgramCPU
 {
 	int		__num_cpu_cores = 0;
-    template <class Float>   double ComputeVectorNorm(const avec<Float>& vec, int mt = 0);
+    template <class Float>
+    double ComputeVectorNorm(const avec<Float>& vec, size_t mt = 0);
 
 #if defined(CPUPBA_USE_SIMD)
     template <class Float>
@@ -600,7 +601,8 @@ namespace ProgramCPU
              return sum;
         }else
         {
-            return ComputeVectorNorm<Float>(vec, 0);
+            size_t ret = 0;
+            return ComputeVectorNorm<Float>(vec, ret);
         }
     }
 
@@ -845,7 +847,7 @@ namespace ProgramCPU
                                     for(size_t i = 0; i < size_t(n); ++i) CloseHandle(tv[i]); }
 #endif
 #else
-#define DEFINE_THREAD_DATA(X)       template<class Float> struct X##_STRUCT { int tid; 
+#define DEFINE_THREAD_DATA(X)       template<class Float> struct X##_STRUCT { size_t tid; 
 #define DECLEAR_THREAD_DATA(X, ...) X##_STRUCT <Float>  tdata = {i,  __VA_ARGS__ }; \
                                     X##_STRUCT <Float>* newdata = new X##_STRUCT <Float>(tdata)
 #define BEGIN_THREAD_PROC(X)        }; template<class Float> void* X##_PROC(X##_STRUCT <Float> * q){
@@ -913,6 +915,9 @@ namespace ProgramCPU
 
 
 
+    template <class Float>
+    void   ComputeSAXPY(Float a, const avec<Float>& vec1, const avec<Float>& vec2, avec<Float>& result, size_t mt = 0);
+
     DEFINE_THREAD_DATA(ComputeSAXPY) 
            Float a; const Float * p1, * p2; Float* p3, * pe;
     BEGIN_THREAD_PROC(ComputeSAXPY) 
@@ -920,14 +925,14 @@ namespace ProgramCPU
     END_THREAD_RPOC(ComputeSAXPY)
 
     template <class Float>
-    void   ComputeSAXPY(Float a, const avec<Float>& vec1, const avec<Float>& vec2, avec<Float>& result, int mt = 0)
+    void   ComputeSAXPY(Float a, const avec<Float>& vec1, const avec<Float>& vec2, avec<Float>& result, size_t mt)
     {
         const bool auto_multi_thread = true;
         if(auto_multi_thread && mt == 0) {  mt = AUTO_MT_NUM( result.size() * 2);  }
         if(mt > 1 && result.size() >= mt * 4)
         {
             MYTHREAD threads[THREAD_NUM_MAX];
-            const size_t thread_num = std::min(mt, THREAD_NUM_MAX);
+            const size_t thread_num = std::min(mt, (size_t)THREAD_NUM_MAX);
             const Float* p1 = vec1.begin(), * p2 = vec2.begin();
             Float* p3 = result.begin();
             for(size_t i = 0; i < thread_num; ++i)
@@ -951,7 +956,7 @@ namespace ProgramCPU
     END_THREAD_RPOC(ComputeVectorNorm)
 
     template <class Float>
-    double ComputeVectorNorm(const avec<Float>& vec, int mt)
+    double ComputeVectorNorm(const avec<Float>& vec, size_t mt)
     {
         const bool auto_multi_thread = true;
         if(auto_multi_thread && mt == 0) {  mt = AUTO_MT_NUM(vec.size());  }
@@ -959,7 +964,7 @@ namespace ProgramCPU
         {
             MYTHREAD threads[THREAD_NUM_MAX];
 			double sumv[THREAD_NUM_MAX];
-            const size_t thread_num = std::min(mt, THREAD_NUM_MAX);
+            const size_t thread_num = std::min(mt, (size_t)THREAD_NUM_MAX);
             const Float * p = vec;
             for(size_t i = 0; i < thread_num; ++i)
             {
@@ -1122,6 +1127,11 @@ namespace ProgramCPU
     }
 
 
+
+    template <class Float>
+    void ComputeProjection(size_t nproj, const Float* camera, const Float* point, const Float* ms, 
+                           const int * jmap, Float* pj, int radial, size_t mt);
+
     DEFINE_THREAD_DATA(ComputeProjection) 
             size_t nproj; const Float* camera, *point, * ms; 
             const int *jmap; Float* pj; int radial_distortion; 
@@ -1131,12 +1141,12 @@ namespace ProgramCPU
 
     template <class Float>
     void ComputeProjection(size_t nproj, const Float* camera, const Float* point, const Float* ms, 
-                           const int * jmap, Float* pj, int radial, int mt)
+                           const int * jmap, Float* pj, int radial, size_t mt)
     {
         if(mt > 1 && nproj >= mt)
         {
             MYTHREAD threads[THREAD_NUM_MAX];
-            const size_t thread_num = std::min(mt, THREAD_NUM_MAX);
+            const size_t thread_num = std::min(mt, (size_t)THREAD_NUM_MAX);
             for(size_t i = 0; i < thread_num; ++i)
             {
                 size_t first = nproj * i / thread_num;
@@ -1179,6 +1189,11 @@ namespace ProgramCPU
         }
     }
 
+
+    template <class Float>
+    void ComputeProjectionX(size_t nproj, const Float* camera, const Float* point, const Float* ms, 
+                           const int * jmap, Float* pj, int radial, size_t mt);
+
     DEFINE_THREAD_DATA(ComputeProjectionX) 
             size_t nproj; const Float* camera, *point, * ms; 
             const int *jmap; Float* pj; int radial_distortion; 
@@ -1189,12 +1204,12 @@ namespace ProgramCPU
 
     template <class Float>
     void ComputeProjectionX(size_t nproj, const Float* camera, const Float* point, const Float* ms, 
-                           const int * jmap, Float* pj, int radial, int mt)
+                           const int * jmap, Float* pj, int radial, size_t mt)
     {
         if(mt > 1 && nproj >= mt)
         {
             MYTHREAD threads[THREAD_NUM_MAX];
-            const size_t thread_num = std::min(mt, THREAD_NUM_MAX);
+            const size_t thread_num = std::min(mt, (size_t)THREAD_NUM_MAX);
             for(size_t i = 0; i < thread_num; ++i)
             {
                 size_t first = nproj * i / thread_num;
@@ -1431,10 +1446,16 @@ namespace ProgramCPU
         }
     }
 
+    template <class Float>
+    void ComputeJacobian(size_t nproj, size_t ncam, const Float* camera, const Float* point, Float*  jc, Float* jp,
+                         const int* jmap, const Float * sj, const Float *  ms, const int * cmlist,
+                         bool intrinsic_fixed , int radial_distortion, bool shuffle, Float* jct, 
+                         size_t mt = 2, size_t i0 = 0);
+
     DEFINE_THREAD_DATA(ComputeJacobian) 
             size_t nproj, ncam; const Float* camera, *point; Float * jc, *jp; 
             const int *jmap; const Float* sj, * ms; const int* cmlist; 
-            bool intrinsic_fixed; int radial_distortion; bool shuffle; Float* jct; int i0;  
+            bool intrinsic_fixed; int radial_distortion; bool shuffle; Float* jct; size_t i0;  
     BEGIN_THREAD_PROC(ComputeJacobian) 
         ComputeJacobian( q->nproj, q->ncam, q->camera, q->point, q->jc, q->jp,
                     q->jmap, q->sj,  q->ms, q->cmlist, q->intrinsic_fixed, 
@@ -1445,13 +1466,13 @@ namespace ProgramCPU
     void ComputeJacobian(size_t nproj, size_t ncam, const Float* camera, const Float* point, Float*  jc, Float* jp,
                          const int* jmap, const Float * sj, const Float *  ms, const int * cmlist,
                          bool intrinsic_fixed , int radial_distortion, bool shuffle, Float* jct, 
-                         int mt = 2, int i0 = 0)
+                         size_t mt, size_t i0)
     {
 
         if(mt > 1 && nproj >= mt)
         {
             MYTHREAD threads[THREAD_NUM_MAX];
-            const size_t thread_num = std::min(mt, THREAD_NUM_MAX);
+            const size_t thread_num = std::min(mt, (size_t)THREAD_NUM_MAX);
             for(size_t i = 0; i < thread_num; ++i)
             {
                 size_t first = nproj * i / thread_num;
@@ -1626,6 +1647,10 @@ namespace ProgramCPU
         InvertSymmetricMatrix<T, n, m>( (T (*)[m]) a, (T (*)[m]) ai);
     }
 
+    template<class Float>
+    void ComputeDiagonalBlockC(size_t ncam,  float lambda1, float lambda2, const Float* jc, const int* cmap,
+                const int* cmlist, Float* di, Float* bi, int vn, bool jc_transpose, bool use_jq, size_t mt);
+
     DEFINE_THREAD_DATA(ComputeDiagonalBlockC) 
         size_t ncam; float lambda1, lambda2; const Float * jc; const int* cmap,* cmlist;
         Float * di, * bi; int vn; bool jc_transpose, use_jq; 
@@ -1636,14 +1661,14 @@ namespace ProgramCPU
 
     template<class Float>
     void ComputeDiagonalBlockC(size_t ncam,  float lambda1, float lambda2, const Float* jc, const int* cmap,
-                const int* cmlist, Float* di, Float* bi, int vn, bool jc_transpose, bool use_jq, int mt)
+                const int* cmlist, Float* di, Float* bi, int vn, bool jc_transpose, bool use_jq, size_t mt)
     {
         const size_t bc = vn * 8;
 
         if(mt > 1 && ncam >= (size_t) mt)
         {
             MYTHREAD threads[THREAD_NUM_MAX];
-            const size_t thread_num = std::min(mt, THREAD_NUM_MAX);
+            const size_t thread_num = std::min(mt, (size_t)THREAD_NUM_MAX);
             for(size_t i = 0; i < thread_num; ++i)
             {
                 size_t first = ncam * i / thread_num;
@@ -1710,6 +1735,10 @@ namespace ProgramCPU
         }
     }
 
+    template<class Float>
+    void ComputeDiagonalBlockP(size_t npt, float lambda1, float lambda2, 
+                        const Float*  jp, const int* pmap, Float* di, Float* bi, size_t mt);
+
     DEFINE_THREAD_DATA(ComputeDiagonalBlockP) 
         size_t npt; float lambda1, lambda2;  const Float * jp; const int* pmap; Float* di, *bi;
     BEGIN_THREAD_PROC(ComputeDiagonalBlockP) 
@@ -1718,12 +1747,12 @@ namespace ProgramCPU
 
     template<class Float>
     void ComputeDiagonalBlockP(size_t npt, float lambda1, float lambda2, 
-                        const Float*  jp, const int* pmap, Float* di, Float* bi, int mt)
+                        const Float*  jp, const int* pmap, Float* di, Float* bi, size_t mt)
     {
         if(mt > 1)
         {
             MYTHREAD threads[THREAD_NUM_MAX];
-            const size_t thread_num = std::min(mt, THREAD_NUM_MAX);
+            const size_t thread_num = std::min(mt, (size_t)THREAD_NUM_MAX);
             for(size_t i = 0; i < thread_num; ++i)
             {
                 size_t first = npt * i / thread_num;
@@ -1783,7 +1812,7 @@ namespace ProgramCPU
     void ComputeDiagonalBlock(size_t ncam, size_t npts, float lambda, bool dampd, const Float* jc, const int* cmap,
                 const Float*  jp, const int* pmap, const int* cmlist, 
 				const Float*  sj, const Float* wq, Float* diag, Float* blocks, 
-                int radial_distortion, bool jc_transpose, int mt1 = 2, int mt2 = 2, int mode = 0)
+                int radial_distortion, bool jc_transpose, size_t mt1 = 2, size_t mt2 = 2, int mode = 0)
     {
         const int    vn = radial_distortion? 8 : 7;
         const size_t bc = vn * 8;
@@ -1928,7 +1957,7 @@ namespace ProgramCPU
 						if(radial_distortion) bc[63] += (j2 * j2 * 2.0f); 
 					}else
 					{
-						const Float* sjc = sjc0 + i * 8;
+//						const Float* sjc = sjc0 + i * 8;
 						bc[0] += (qw[0] * qw[0] * 2.0f);
 						if(radial_distortion) bc[63] += (qw[1] * qw[1] * 2.0f); 
 					}
@@ -1990,64 +2019,72 @@ namespace ProgramCPU
 		}
     }
 
+
+    template<class Float>
+    void MultiplyBlockConditionerC(size_t ncam, const Float* bi, const Float*  x, Float* vx, size_t vn, size_t mt = 0);
+
     DEFINE_THREAD_DATA(MultiplyBlockConditionerC) 
-        int ncam;  const Float * bi, * x;  Float * vx; int vn; 
+        size_t ncam;  const Float * bi, * x;  Float * vx; size_t vn; 
     BEGIN_THREAD_PROC(MultiplyBlockConditionerC) 
         MultiplyBlockConditionerC(q->ncam, q->bi, q->x, q->vx, q->vn, 0);
     END_THREAD_RPOC(MultiplyBlockConditionerC)
 
     template<class Float>
-    void MultiplyBlockConditionerC(int ncam, const Float* bi, const Float*  x, Float* vx, int vn, int mt = 0)
+    void MultiplyBlockConditionerC(size_t ncam, const Float* bi, const Float*  x, Float* vx, size_t vn, size_t mt)
     {
         if(mt > 1 && ncam >= mt)
         {
             const size_t bc = vn * 8;
             MYTHREAD threads[THREAD_NUM_MAX];
-            const int thread_num = std::min(mt, THREAD_NUM_MAX);
-            for(int i = 0; i < thread_num; ++i)
+            const size_t thread_num = std::min(mt, (size_t)THREAD_NUM_MAX);
+            for(size_t i = 0; i < thread_num; ++i)
             {
-                int first = ncam * i / thread_num;
-                int last_ = ncam * (i + 1) / thread_num;
-                int last  = std::min(last_, ncam);
+                size_t first = ncam * i / thread_num;
+                size_t last_ = ncam * (i + 1) / thread_num;
+                size_t last  = std::min(last_, ncam);
                 RUN_THREAD(MultiplyBlockConditionerC, threads[i],
-                    (last - first), bi + first * bc, x + 8 *first, vx + 8 * first, vn);
+                    (size_t)(last - first), bi + first * bc, x + 8 *first, vx + 8 * first, vn);
             }
             WAIT_THREAD(threads, thread_num);
         }else
         {
-            for(int i = 0; i < ncam; ++i, x += 8, vx += 8)
+            for(size_t i = 0; i < ncam; ++i, x += 8, vx += 8)
             {
                 Float *vxc = vx;
-                for(int j = 0; j < vn; ++j, bi += 8, ++vxc)  *vxc = DotProduct8(bi, x);
+                for(size_t j = 0; j < vn; ++j, bi += 8, ++vxc)  *vxc = DotProduct8(bi, x);
             }
         }
     }
 
+
+    template<class Float>
+    void MultiplyBlockConditionerP(size_t npoint, const Float* bi, const Float*  x, Float* vx, size_t mt = 0);
+
     DEFINE_THREAD_DATA(MultiplyBlockConditionerP) 
-        int npoint;  const Float * bi, * x;  Float * vx; 
+        size_t npoint;  const Float * bi, * x;  Float * vx; 
     BEGIN_THREAD_PROC(MultiplyBlockConditionerP) 
         MultiplyBlockConditionerP(q->npoint, q->bi, q->x, q->vx, 0);
     END_THREAD_RPOC(MultiplyBlockConditionerP)
 
     template<class Float>
-    void MultiplyBlockConditionerP(int npoint, const Float* bi, const Float*  x, Float* vx, int mt = 0)
+    void MultiplyBlockConditionerP(size_t npoint, const Float* bi, const Float*  x, Float* vx, size_t mt)
     {
         if(mt > 1 && npoint >= mt)
         {
             MYTHREAD threads[THREAD_NUM_MAX];
-            const int thread_num = std::min(mt, THREAD_NUM_MAX);
-            for(int i = 0; i < thread_num; ++i)
+            const size_t thread_num = std::min(mt, (size_t)THREAD_NUM_MAX);
+            for(size_t i = 0; i < thread_num; ++i)
             {
-                int first = npoint * i / thread_num;
-                int last_ = npoint * (i + 1) / thread_num;
-                int last  = std::min(last_, npoint);
+                size_t first = npoint * i / thread_num;
+                size_t last_ = npoint * (i + 1) / thread_num;
+                size_t last  = std::min(last_, npoint);
                 RUN_THREAD(MultiplyBlockConditionerP, threads[i],
                     (last - first), bi + first * 6, x + POINT_ALIGN *first, vx + POINT_ALIGN * first);
             }
             WAIT_THREAD(threads, thread_num);
         }else
         {
-            for(int i = 0; i < npoint; ++i, bi += 6, x += POINT_ALIGN, vx += POINT_ALIGN)
+            for(size_t i = 0; i < npoint; ++i, bi += 6, x += POINT_ALIGN, vx += POINT_ALIGN)
             {
                 vx[0] = (bi[0] * x[0] + bi[1] * x[1] + bi[2] * x[2]);
                 vx[1] = (bi[1] * x[0] + bi[3] * x[1] + bi[4] * x[2]);
@@ -2058,7 +2095,7 @@ namespace ProgramCPU
 
     template<class Float>
     void MultiplyBlockConditioner(int ncam, int npoint, const Float* blocksv,
-                                  const Float*  vec, Float* resultv, int radial, int mode,  int mt1, int mt2)
+                                  const Float*  vec, Float* resultv, int radial, int mode, size_t mt1, size_t mt2)
     {
         const int vn = radial ? 8 : 7;
         if(mode != 2) MultiplyBlockConditionerC(ncam, blocksv, vec, resultv, vn, mt1);
@@ -2067,6 +2104,10 @@ namespace ProgramCPU
     }
 
     ////////////////////////////////////////////////////
+    template<class Float>
+    void ComputeJX( size_t nproj, size_t ncam,  const Float* x, const Float*  jc, 
+                    const Float* jp, const int* jmap, Float* jx, int mode, size_t mt = 2);
+
     DEFINE_THREAD_DATA(ComputeJX) 
         size_t nproj, ncam; const Float* xc, *jc,* jp; const int* jmap; Float* jx; int mode;
     BEGIN_THREAD_PROC(ComputeJX) 
@@ -2075,12 +2116,12 @@ namespace ProgramCPU
 
     template<class Float>
     void ComputeJX( size_t nproj, size_t ncam,  const Float* x, const Float*  jc, 
-                    const Float* jp, const int* jmap, Float* jx, int mode, int mt = 2)
+                    const Float* jp, const int* jmap, Float* jx, int mode, size_t mt)
     {
         if(mt > 1 && nproj >= mt)
         {
             MYTHREAD threads[THREAD_NUM_MAX];
-            const size_t thread_num = std::min(mt, THREAD_NUM_MAX);
+            const size_t thread_num = std::min(mt, (size_t)THREAD_NUM_MAX);
             for(size_t i = 0; i < thread_num; ++i)
             {
                 size_t first = nproj * i / thread_num;
@@ -2122,6 +2163,12 @@ namespace ProgramCPU
         }
     }
 
+
+    template<class Float>
+    void ComputeJX_(size_t nproj, size_t ncam,  const Float* x, Float* jx, const Float* camera,
+                    const Float* point,  const Float* ms, const Float* sj, const int*  jmap, 
+                    bool intrinsic_fixed, int radial_distortion, int mode, size_t mt = 16);
+
     DEFINE_THREAD_DATA(ComputeJX_) 
            size_t nproj, ncam; const Float* x; Float * jx; 
             const Float* camera, *point,* ms, *sj; const int *jmap;  
@@ -2134,12 +2181,12 @@ namespace ProgramCPU
     template<class Float>
     void ComputeJX_(size_t nproj, size_t ncam,  const Float* x, Float* jx, const Float* camera,
                     const Float* point,  const Float* ms, const Float* sj, const int*  jmap, 
-                    bool intrinsic_fixed, int radial_distortion, int mode, int mt = 16)
+                    bool intrinsic_fixed, int radial_distortion, int mode, size_t mt)
     {
         if(mt > 1 && nproj >= mt)
         {
             MYTHREAD threads[THREAD_NUM_MAX];
-            const size_t thread_num = std::min(mt, THREAD_NUM_MAX);
+            const size_t thread_num = std::min(mt, (size_t)THREAD_NUM_MAX);
             for(size_t i = 0; i < thread_num; ++i)
             {
                 size_t first = nproj * i / thread_num;
@@ -2230,6 +2277,10 @@ namespace ProgramCPU
         }
     }
 
+    template<class Float>
+    void ComputeJtEC(    size_t ncam, const Float* pe, const Float* jc, const int* cmap, 
+                        const int* cmlist,  Float* v, bool jc_transpose, size_t mt);
+
     DEFINE_THREAD_DATA(ComputeJtEC) 
         size_t ncam; const Float* pe, * jc; const int* cmap,* cmlist;  Float* v;bool jc_transpose;
     BEGIN_THREAD_PROC(ComputeJtEC) 
@@ -2238,12 +2289,12 @@ namespace ProgramCPU
 
     template<class Float>
     void ComputeJtEC(    size_t ncam, const Float* pe, const Float* jc, const int* cmap, 
-                        const int* cmlist,  Float* v, bool jc_transpose, int mt)
+                        const int* cmlist,  Float* v, bool jc_transpose, size_t mt)
     {
         if(mt > 1 && ncam >= mt)
         {
             MYTHREAD threads[THREAD_NUM_MAX]; //if(ncam < mt) mt = ncam;
-            const size_t thread_num = std::min(mt, THREAD_NUM_MAX);
+            const size_t thread_num = std::min(mt, (size_t)THREAD_NUM_MAX);
             for(size_t i = 0; i < thread_num; ++i)
             {
                 size_t first = ncam * i / thread_num;
@@ -2274,6 +2325,10 @@ namespace ProgramCPU
     }
 
 
+    template<class Float>
+    void ComputeJtEP(   size_t npt, const Float* pe, const Float* jp,
+                        const int* pmap, Float* v,  size_t mt);
+
     DEFINE_THREAD_DATA(ComputeJtEP) 
         size_t npt; const Float* pe, * jp; const int* pmap; Float* v; 
     BEGIN_THREAD_PROC(ComputeJtEP) 
@@ -2282,12 +2337,12 @@ namespace ProgramCPU
 
     template<class Float>
     void ComputeJtEP(   size_t npt, const Float* pe, const Float* jp,
-                        const int* pmap, Float* v,  int mt)
+                        const int* pmap, Float* v,  size_t mt)
     {
         if(mt > 1 && npt >= mt)
         {
             MYTHREAD threads[THREAD_NUM_MAX];
-            const size_t thread_num = std::min(mt, THREAD_NUM_MAX);
+            const size_t thread_num = std::min(mt, (size_t)THREAD_NUM_MAX);
             for(size_t i = 0; i < thread_num; ++i)
             {
                 size_t first = npt * i / thread_num;
@@ -2321,7 +2376,7 @@ namespace ProgramCPU
     template<class Float>
     void ComputeJtE(    size_t ncam, size_t npt, const Float* pe, const Float* jc, 
                         const int* cmap, const int* cmlist,  const Float* jp,
-                        const int* pmap, Float* v, bool jc_transpose, int mode, int mt1, int mt2)
+                        const int* pmap, Float* v, bool jc_transpose, int mode, size_t mt1, size_t mt2)
     {
         if(mode != 2)
         {
@@ -2335,6 +2390,12 @@ namespace ProgramCPU
     }
 
 
+    template<class Float>
+    void ComputeJtEC_(  size_t ncam, const Float* ee,  Float* jte,
+                        const Float* c, const Float* point, const Float* ms, 
+                        const int* jmap, const int* cmap, const int * cmlist, 
+                        bool intrinsic_fixed, int radial_distortion, size_t mt);
+
     DEFINE_THREAD_DATA(ComputeJtEC_) 
            size_t ncam; const Float* ee; Float * jte; const Float* c, *point,* ms;
            const int *jmap, *cmap, *cmlist; bool intrinsic_fixed; int radial_distortion;
@@ -2347,13 +2408,13 @@ namespace ProgramCPU
     void ComputeJtEC_(  size_t ncam, const Float* ee,  Float* jte,
                         const Float* c, const Float* point, const Float* ms, 
                         const int* jmap, const int* cmap, const int * cmlist, 
-                        bool intrinsic_fixed, int radial_distortion, int mt)
+                        bool intrinsic_fixed, int radial_distortion, size_t mt)
     {
         if(mt > 1 && ncam >= mt)
         {
             MYTHREAD threads[THREAD_NUM_MAX];
 			//if(ncam < mt) mt = ncam;
-            const size_t thread_num = std::min(mt, THREAD_NUM_MAX);
+            const size_t thread_num = std::min(mt, (size_t)THREAD_NUM_MAX);
             for(size_t i = 0; i < thread_num; ++i)
             {
                 size_t first = ncam * i / thread_num;
@@ -2396,7 +2457,7 @@ namespace ProgramCPU
     void ComputeJtE_(   size_t nproj, size_t ncam, size_t npt, const Float* ee,  Float* jte,
                         const Float* camera, const Float* point, const Float* ms, const int* jmap,
                         const int* cmap, const int* cmlist, const int* pmap, const Float* jp, 
-                        bool intrinsic_fixed, int radial_distortion, int mode, int mt)
+                        bool intrinsic_fixed, int radial_distortion, int mode, size_t mt)
     {
         if(mode != 2)
         {

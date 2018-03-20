@@ -162,6 +162,7 @@ protected:      //cpu data
     int             _num_camera;
     int             _num_point;
     int             _num_imgpt;
+    int          _num_imgpt_q;
     CameraT*        _camera_data;   
     float*          _point_data;
 
@@ -205,7 +206,6 @@ protected:      //cuda data
 
 	//////////////////////////////////
 protected:
-    int          _num_imgpt_q;
 	float		 _weight_q;
 	VectorI		 _cuCameraQList;
 	VectorI		 _cuCameraQMap;

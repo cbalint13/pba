@@ -244,7 +244,9 @@ struct CameraT_
     ////////////////////////////////////////////////
 	template <class Float> void SetMatrixRotation(const Float * r)   
 	{   
-		for(int i = 0; i < 9; ++i) m[0][i] = float_t(r[i]);
+		for(int i = 0; i < 3; ++i)
+		  for(int j = 0; j < 3; ++j) 
+		    m[i][j] = float_t(r[i*3+j]);
 	}
     template <class Float>    void GetMatrixRotation(Float * r) const
     {
@@ -287,15 +289,19 @@ struct CameraT_
     template <class Float>     void SetInvertedRT(const Float e[3], const Float T[3])
     {
         SetRodriguesRotation(e);
-        for(int i = 3; i < 9; ++i) m[0][i] = - m[0][i];
+        for(int i = 1; i < 3; ++i)
+          for(int j = 0; j < 3; ++j)
+            m[i][j] = - m[i][j];
         SetTranslation(T); t[1] = - t[1]; t[2] = -t[2];
     }    
 
     template <class Float>     void GetInvertedRT (Float e[3], Float T[3]) const
     {
         CameraT ci;    ci.SetMatrixRotation(m[0]);
-        for(int i = 3; i < 9; ++i) ci.m[0][i] = - ci.m[0][i];
-        //for(int i = 1; i < 3; ++i) for(int j = 0; j < 3; ++j) ci.m[i][j] = - ci.m[i][j];
+        //for(int i = 3; i < 9; ++i) ci.m[0][i] = - ci.m[0][i];
+        for(int i = 1; i < 3; ++i)
+          for(int j = 0; j < 3; ++j)
+            ci.m[i][j] = - ci.m[i][j];
         ci.GetRodriguesRotation(e);
         GetTranslation(T);    T[1] = - T[1]; T[2] = -T[2];
     }
