@@ -1,3 +1,7 @@
+1.0.6
+Added CMakeFile
+Fix compile warnings
+
 1.0.5
 Fixed a bug (rarely happens) in CUDA kernel configuration
 	* Symptom: ComputeJtE<Point>: invalid configuration argument(9)
