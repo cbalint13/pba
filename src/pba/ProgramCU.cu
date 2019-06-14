@@ -38,7 +38,7 @@
 inline void CuTexImage:: BindTexture(textureReference& texRef)
 {
 	size_t sz = GetDataSize();
-    if(sz > MAX_TEXSIZE) fprintf(stderr, "cudaBindTexture: %d > %d\n", sz , MAX_TEXSIZE); 
+    if(sz > MAX_TEXSIZE) fprintf(stderr, "cudaBindTexture: %ld > %d\n", sz , MAX_TEXSIZE); 
     cudaError_t e =cudaBindTexture(NULL, &texRef, data(), &texRef.channelDesc, sz);
 }
 
@@ -117,7 +117,7 @@ inline int CuTexImage::BindTextureX(textureReference& texRef1, textureReference&
 //////////////////////////////////////////////////////
 void ProgramCU::FinishWorkCUDA()
 {
-    cudaThreadSynchronize();
+    cudaDeviceSynchronize();
 }
 
 int ProgramCU::CheckErrorCUDA(const char* location)
@@ -128,7 +128,6 @@ int ProgramCU::CheckErrorCUDA(const char* location)
         if(location) fprintf(stderr, "%s:\t",  location);
         fprintf(stderr, "%s(%d)\n", cudaGetErrorString(e), e);
         throw location;
-        return 1;
     }else
     {
         //fprintf(stderr, "%s:\n",  location);
@@ -2196,7 +2195,7 @@ bool ProgramCU::ShuffleCameraJacobian(CuTexImage& jc, CuTexImage& map, CuTexImag
  
     if(szjc > 2 * MAX_TEXSIZE)
     {
-        fprintf(stderr, "datasize way too big %d, %d+...\n", szjc, (szjc)/ MAX_TEXSIZE); 
+        fprintf(stderr, "datasize way too big %ld, %ld+...\n", szjc, (szjc)/ MAX_TEXSIZE); 
         return false;
     }else    if(szjc > MAX_TEXSIZE)
     {
