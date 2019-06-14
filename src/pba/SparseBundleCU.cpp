@@ -74,10 +74,10 @@ if(__debug_pba && v.IsValid()){\
 #define DEBUG_FUNC(v, func, input) DEBUG_FUNCN(v, func, input, 2)
 
 
-SparseBundleCU::SparseBundleCU(int device) : ParallelBA(PBA_INVALID_DEVICE),
-                    _num_camera(0), _num_point(0), _num_imgpt(0), _num_imgpt_q(0), 
-                    _camera_data(NULL), _point_data(NULL), _imgpt_data(NULL), 
-                    _camera_idx(NULL), _point_idx(NULL),  _projection_sse(0)
+SparseBundleCU::SparseBundleCU(int device) : ParallelBA(PBA_INVALID_DEVICE), 
+                    _num_camera(0), _num_point(0), _num_imgpt(0), _camera_data(NULL), 
+                    _point_data(NULL), _imgpt_data(NULL), _camera_idx(NULL), 
+                    _point_idx(NULL),  _projection_sse(0), _num_imgpt_q(0)
 {
     __selected_device = device;
 }
@@ -280,7 +280,7 @@ bool SparseBundleCU::CheckRequiredMem(int fresh)
 	int p = 8 * m + 4 * n, q = _num_imgpt_q;
     size_t szn, total = GetCudaMemoryCap();
 	size_t sz0 = 800*600*2*4*sizeof(float); // 
-	size_t szq = q > 0 ? (sizeof(float) *(q + m) * 4) : 0;
+	//size_t szq = q > 0 ? (sizeof(float) *(q + m) * 4) : 0;
     size_t sz = sizeof(float) * (258 + 9 * n + 33 * m + 7 * k) + sz0;
 
 	/////////////////////////////////// CG 
