@@ -133,9 +133,9 @@ void CuTexImage::CopyToHost(void * buf)
 {
     if(_cuData == NULL) return;
     size_t sz = _imgWidth * _imgHeight * _numChannel * sizeof(float);
-    //cudaThreadSynchronize();    
+    //cudaDeviceSynchronize();    
     cudaMemcpy(buf, _cuData,sz , cudaMemcpyDeviceToHost);
-    cudaThreadSynchronize();
+    cudaDeviceSynchronize(); // cudaThreadSynchronize was deprecated in CUDA 10.0
 }
 
 
